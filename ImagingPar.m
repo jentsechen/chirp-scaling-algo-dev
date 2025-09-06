@@ -41,25 +41,28 @@ classdef ImagingPar
                 point_target_echo_signal(i, :) = echo_signal;
             end
         end
-        function plot_point_target_echo_signal(obj, point_target_echo_signal, time_unit_mode)
-            if time_unit_mode == TimeUnitMode.Second
+        function plot_point_target_echo_signal(obj, point_target_echo_signal, x_axis_mode, y_axis_mode)
+            if x_axis_mode == AxisMode.TimeSecond
                 x_axis = obj.range_time_stamp_sec * 1e6;
-            else
-                x_axis = obj.range_time_stamp_sec;
             end
-            y_axis = obj.azimuth_time_stamp_sec;
+            if y_axis_mode == AxisMode.TimeSecond
+                y_axis = obj.range_time_stamp_sec * 1e6;
+            end
             figure;
             data_funcs = {@real, @imag, @abs, @angle};
             titles = {'real part', 'imaginary part', 'magnitude', 'phase (rad)'};
             for i = 1:4
                 subplot(2,2,i);
-                if time_unit_mode == TimeUnitMode.Second
+                if x_axis_mode == AxisMode.TimeSecond && y_axis_mode == AxisMode.TimeSecond
                     imagesc(x_axis, y_axis, data_funcs{i}(point_target_echo_signal));
-                    xlabel('range time (\mus)'); ylabel('azimuth time (s)');
+                elseif x_axis_mode == AxisMode.TimeSecond
+                    imagesc(x_axis, data_funcs{i}(point_target_echo_signal));
+                elseif y_axis_mode == AxisMode.TimeSecond
+                    imagesc(y_axis, data_funcs{i}(point_target_echo_signal));
                 else
                     imagesc(data_funcs{i}(point_target_echo_signal));
-                    xlabel('range time (sample)'); ylabel('azimuth time (sample)');
                 end
+                xlabel(obj.gen_xlabel(x_axis_mode)); ylabel(obj.gen_ylabel(y_axis_mode));
                 title(titles{i}); colorbar; axis xy;
             end
         end
@@ -83,6 +86,28 @@ classdef ImagingPar
         function range_window = range_window(obj, round_trip_time_sec)
             range_window = ((obj.range_time_stamp_sec-round_trip_time_sec)>-obj.sig_par.pulse_width_sec/2) & ...
                            ((obj.range_time_stamp_sec-round_trip_time_sec)<obj.sig_par.pulse_width_sec/2);
+        end
+        function xlabel_str = gen_xlabel(~, x_axis_mode)
+            if x_axis_mode == AxisMode.TimeSecond
+                xlabel_str  = 'range time (\mus)';
+            elseif x_axis_mode == AxisMode.TimeSample
+                xlabel_str  = 'range time (sample)';
+            elseif x_axis_mode == AxisMode.FreqSample
+                xlabel_str  = 'range freq. (sample)';
+            else
+                error('Unsupported x-axis mode.');
+            end
+        end
+        function ylabel_str  = gen_ylabel(~, y_axis_mode)
+            if y_axis_mode == AxisMode.TimeSecond
+                ylabel_str  = 'azimuth time (\mus)';
+            elseif y_axis_mode == AxisMode.TimeSample
+                ylabel_str  = 'azimuth time (sample)';
+            elseif y_axis_mode == AxisMode.FreqSample
+                ylabel_str  = 'azimuth freq. (sample)';
+            else
+                error('Unsupported y-axis mode.');
+            end
         end
     end
 end
