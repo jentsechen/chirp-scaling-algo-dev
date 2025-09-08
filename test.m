@@ -8,10 +8,13 @@ imaging_par = ImagingPar('sig_par', sig_par, 'closest_slant_range_m', 4e3);
 point_target_echo_signal = load('point_target_echo_signal.mat').point_target_echo_signal;
 % imaging_par.plot_point_target_echo_signal(point_target_echo_signal, AxisMode.TimeSample, AxisMode.TimeSample);
 
-chirp_scaling_algo = ChirpScalingAlgo(point_target_echo_signal);
-azimuth_fft_out = chirp_scaling_algo.azimuth_fft;
+chirp_scaling_algo = ChirpScalingAlgo("imaging_par", imaging_par);
+azimuth_fft_out = chirp_scaling_algo.azimuth_fft(point_target_echo_signal);
+chirp_scaling_out = chirp_scaling_algo.apply_chirp_scaling(azimuth_fft_out);
+range_fft_out = chirp_scaling_algo.range_fft(chirp_scaling_out);
 imaging_par.plot_point_target_echo_signal(azimuth_fft_out, AxisMode.TimeSample, AxisMode.FreqSample);
-
+imaging_par.plot_point_target_echo_signal(chirp_scaling_out, AxisMode.TimeSample, AxisMode.FreqSample);
+imaging_par.plot_point_target_echo_signal(range_fft_out, AxisMode.FreqSample, AxisMode.FreqSample);
 
 % mc_imaging_par = metaclass(imaging_par);
 % for i = 1:length(mc_imaging_par.Properties)
