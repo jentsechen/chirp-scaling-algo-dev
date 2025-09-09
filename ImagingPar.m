@@ -8,6 +8,7 @@ classdef ImagingPar
         synthetic_aperture_len_m
         synthetic_aperture_time_sec
         range_time_axis_sec % \tau
+        range_freq_axis_hz % f_\tau
         azimuth_time_axis_sec % \eta
         azimuth_freq_axis_hz % f_\eta
     end
@@ -28,8 +29,9 @@ classdef ImagingPar
             obj.beamwidth_rad = obj.sig_par.wavelength_m / obj.azimuth_aperture_len_m;
             obj.synthetic_aperture_len_m = obj.beamwidth_rad * obj.closest_slant_range_m;
             obj.synthetic_aperture_time_sec = obj.synthetic_aperture_len_m / obj.sensor_speed_m_s;
-            obj.range_time_axis_sec = obj.gen_range_time_axis_sec;
-            obj.azimuth_time_axis_sec = obj.gen_azimuth_time_axis_sec;
+            obj.range_time_axis_sec = obj.gen_range_time_axis_sec();
+            obj.range_freq_axis_hz = obj.gen_freq_axis(obj.sig_par.sampling_freq_hz, length(obj.range_time_axis_sec));
+            obj.azimuth_time_axis_sec = obj.gen_azimuth_time_axis_sec();
             obj.azimuth_freq_axis_hz = obj.gen_freq_axis(obj.sig_par.pulse_rep_freq_hz, length(obj.azimuth_time_axis_sec));
         end
         function point_target_echo_signal = point_target_echo_signal(obj)
@@ -38,7 +40,7 @@ classdef ImagingPar
                 slant_range_m = obj.slant_range_m(obj.azimuth_time_axis_sec(i));
                 round_trip_time_sec = obj.round_trip_time_sec(slant_range_m);
                 echo_signal = obj.range_window(round_trip_time_sec) .* ...
-                              exp(1j*pi*obj.sig_par.chirp_rate_hz_s*(obj.range_time_axis_sec-round_trip_time_sec).^2) .* ...
+                              exp(1j*pi*obj.sig_par.range_fm_rate_hz_s*(obj.range_time_axis_sec-round_trip_time_sec).^2) .* ...
                               exp(-1j*4*pi*slant_range_m/obj.sig_par.wavelength_m);
                 point_target_echo_signal(i, :) = echo_signal;
             end
@@ -71,7 +73,7 @@ classdef ImagingPar
     end
     methods (Access = private)
         function range_time_axis_sec = gen_range_time_axis_sec(obj)
-            range_time_axis_sec_len = floor(2 * obj.sig_par.pulse_width_sec * obj.sig_par.sampling_freq_hz / 2) * 2;
+            range_time_axis_sec_len = floor(8 * obj.sig_par.pulse_width_sec * obj.sig_par.sampling_freq_hz / 2) * 2;
             range_time_axis_sec = (-range_time_axis_sec_len/2 : range_time_axis_sec_len/2-1) / obj.sig_par.sampling_freq_hz ...
                                 + 2 * obj.closest_slant_range_m / obj.sig_par.light_speed_m_s;
         end
