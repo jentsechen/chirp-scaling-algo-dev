@@ -114,7 +114,7 @@ classdef ImagingPar
             end
         end
         function freq_axis_hz = gen_freq_axis(~, sampling_freq_hz, n_sample)
-            freq_axis_hz = linspace(-sampling_freq_hz/2, sampling_freq_hz/2-sampling_freq_hz/n_sample, n_sample);
+            freq_axis_hz = (-n_sample/2 : n_sample/2-1) * (sampling_freq_hz/n_sample);
         end
     end
 end
