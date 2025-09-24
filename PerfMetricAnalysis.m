@@ -1,12 +1,12 @@
 classdef PerfMetricAnalysis
     properties
         data_anal
-        sig_par SigPar
+        imaging_par ImagingPar
         azi_peak_loc
         rng_peak_loc
         azi_n_smp_anal = 100
         rng_n_smp_anal = 50
-        interp_factor = 20
+        interp_factor = 50
     end
     methods
         function obj = PerfMetricAnalysis(varargin)
@@ -60,15 +60,20 @@ classdef PerfMetricAnalysis
             pslr_db = 20*log10(mainlobe_peak / sidelobe_peak);
             fprintf('PSLR = %.2f dB\n', pslr_db)
         end
-        function calc_irw(obj, sig)
+        function calc_irw(obj, sig, is_rng)
             mag = abs(sig) / max(abs(sig));
             [~, peak_idx] = max(mag);
             th = 10^(-3/20);
             left_idx = find(mag(1:peak_idx) <= th, 1, 'last');
             right_idx = peak_idx - 1 + find(mag(peak_idx:end) <= th, 1, 'first');
             irw_smp = right_idx - left_idx;
-            irw_m = irw_smp / (obj.sig_par.sampling_freq_hz * obj.interp_factor) ...
-                    * obj.sig_par.light_speed_m_s;
+            if is_rng == true
+                irw_m = irw_smp / (obj.imaging_par.sig_par.sampling_freq_hz * obj.interp_factor) ...
+                        * obj.imaging_par.sig_par.light_speed_m_s / 2;
+            else
+                irw_m = irw_smp / (obj.imaging_par.sig_par.pulse_rep_freq_hz * obj.interp_factor) ...
+                        * obj.imaging_par.sensor_speed_m_s;
+            end
             fprintf('IRW = %.2f m\n', irw_m)
         end
     end

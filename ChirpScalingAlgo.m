@@ -4,6 +4,10 @@ classdef ChirpScalingAlgo
         migr_par % D(f_\eta, V_r)
         modified_range_fm_rate_hz_s % K_m
         chirp_scaling
+        range_comp_filt
+        azimuth_comp_filt
+        second_comp_filt
+        third_comp_filt
     end
     methods
         function obj = ChirpScalingAlgo(varargin)
@@ -22,27 +26,58 @@ classdef ChirpScalingAlgo
             obj.migr_par = obj.gen_migr_par();
             obj.modified_range_fm_rate_hz_s = obj.modify_range_fm_rate_hz_s();
             obj.chirp_scaling = obj.gen_chirp_scaling();
+            obj.range_comp_filt = obj.gen_range_comp_filt();
+            obj.azimuth_comp_filt = obj.gen_azimuth_comp_filt();
+            obj.second_comp_filt = obj.gen_second_comp_filt();
+            obj.third_comp_filt = obj.gen_third_comp_filt();
         end
-        function azimuth_fft_out = apply_azimuth_fft(~, raw_data)
-            azimuth_fft_out = fft(raw_data, [], 1);
+        function output = apply_azimuth_fft(~, input)
+            output = fft(input, [], 1);
         end
-        function azimuth_ifft_out = apply_azimuth_ifft(~, third_phase_func_out)
-            azimuth_ifft_out = ifft(third_phase_func_out, [], 1);
+        function azimuth_ifft_out = apply_azimuth_ifft(~, input)
+            azimuth_ifft_out = ifft(input, [], 1);
         end
-        function range_fft_out = apply_range_fft(~, chirp_scaling_out)
-            range_fft_out = fft(chirp_scaling_out, [], 2);
+        function output = apply_range_fft(~, input)
+            output = fft(input, [], 2);
         end
-        function range_ifft_out = apply_range_ifft(~, sec_phase_func_out)
-            range_ifft_out = ifft(sec_phase_func_out, [], 2);
+        function output = apply_range_ifft(~, input)
+            output = ifft(input, [], 2);
         end
-        function chirp_scaling_out = apply_chirp_scaling(obj, azimuth_fft_out)
-            chirp_scaling_out = azimuth_fft_out .* obj.chirp_scaling;
+        function output = apply_chirp_scaling(obj, input)
+            output = input .* obj.chirp_scaling;
         end
-        function sec_phase_func_out = apply_sec_phase_func(obj, range_fft_out)
-            sec_phase_func_out = range_fft_out .* obj.gen_second_phase_func();
+        function output = apply_chirp_scaling_conj(obj, input)
+            output = input .* conj(obj.chirp_scaling);
         end
-        function third_phase_func_out = apply_third_phase_func(obj, range_fft_out)
-            third_phase_func_out = range_fft_out .* obj.gen_third_phase_func();
+        function output = apply_second_phase_func(obj, input)
+            output = input .* obj.range_comp_filt .* obj.second_comp_filt;
+        end
+        function output = apply_second_phase_func_conj(obj, input)
+            output = input .* conj(obj.range_comp_filt) .* conj(obj.second_comp_filt);
+        end
+        function output = apply_third_phase_func(obj, input)
+            output = input .* obj.azimuth_comp_filt;
+        end
+        function output = apply_third_phase_func_conj(obj, input)
+            output = input .* conj(obj.azimuth_comp_filt);
+        end
+        function output = apply_csa(obj, input)
+            azimuth_fft_out = obj.apply_azimuth_fft(input);
+            chirp_scaling_out = obj.apply_chirp_scaling(azimuth_fft_out);
+            range_fft_out = obj.apply_range_fft(chirp_scaling_out);
+            second_phase_func_out = obj.apply_second_phase_func(range_fft_out);
+            range_ifft_out = obj.apply_range_ifft(second_phase_func_out);
+            third_phase_func_out = obj.apply_third_phase_func(range_ifft_out);
+            output = obj.apply_azimuth_ifft(third_phase_func_out);
+        end
+        function output = apply_inv_csa(obj, input)
+            azimuth_fft_out = obj.apply_azimuth_fft(input);
+            third_phase_func_conj_out = obj.apply_third_phase_func_conj(azimuth_fft_out);
+            range_fft_out = obj.apply_range_fft(third_phase_func_conj_out);
+            second_phase_func_conj_out = obj.apply_second_phase_func_conj(range_fft_out);
+            range_ifft_out = obj.apply_range_ifft(second_phase_func_conj_out);
+            chirp_scaling_conj_out = obj.apply_chirp_scaling_conj(range_ifft_out);
+            output = obj.apply_azimuth_ifft(chirp_scaling_conj_out);
         end
     end
     methods (Access = private)
@@ -74,37 +109,43 @@ classdef ChirpScalingAlgo
             chirp_scaling = exp(1j * pi * first_order_mat .* second_order_mat);
             chirp_scaling = fftshift(chirp_scaling, 1);
         end
-        function second_phase_func = gen_second_phase_func(obj)
+        function range_comp_filt = gen_range_comp_filt(obj)
             col_len = length(obj.imaging_par.azimuth_freq_axis_hz);
             row_len = length(obj.imaging_par.range_freq_axis_hz);
-            rc_exp_col_term = obj.migr_par ./ obj.modified_range_fm_rate_hz_s;
-            rc_exp_row_term = obj.imaging_par.range_freq_axis_hz.^2;
-            rc_exp_mat = repmat(rc_exp_col_term, 1, row_len) .* repmat(rc_exp_row_term, col_len, 1);
-            rc = exp(1j * pi * rc_exp_mat);
+            range_comp_exp_col_term = obj.migr_par ./ obj.modified_range_fm_rate_hz_s;
+            range_comp_exp_row_term = obj.imaging_par.range_freq_axis_hz.^2;
+            range_comp_exp_mat = repmat(range_comp_exp_col_term, 1, row_len) .* repmat(range_comp_exp_row_term, col_len, 1);
+            range_comp = exp(1j * pi * range_comp_exp_mat);
+            range_comp_filt = fftshift(range_comp);
+        end
+        function second_comp_filt = gen_second_comp_filt(obj)
+            col_len = length(obj.imaging_par.azimuth_freq_axis_hz);
+            row_len = length(obj.imaging_par.range_freq_axis_hz);
             second_comp_exp_col_term = 1 ./ obj.migr_par - 1;
             second_comp_exp_row_term = obj.imaging_par.range_freq_axis_hz;
             second_comp_exp_mat = repmat(second_comp_exp_col_term, 1, row_len) .* ...
                                       repmat(second_comp_exp_row_term, col_len, 1);
             second_comp = exp(1j * 4 * pi * obj.imaging_par.closest_slant_range_m / ...
                             obj.imaging_par.sig_par.light_speed_m_s * second_comp_exp_mat);
-            second_phase_func = rc .* second_comp;
-            second_phase_func = fftshift(second_phase_func);
-            % second_phase_func = fftshift(rc);
+            second_comp_filt = fftshift(second_comp);
         end
-        function third_phase_func = gen_third_phase_func(obj)
+        function azimuth_comp_filt = gen_azimuth_comp_filt(obj)
             row_len = length(obj.imaging_par.range_freq_axis_hz);
             azimuth_comp_phase_col_term = obj.imaging_par.closest_slant_range_m / ...
                                 obj.imaging_par.sig_par.wavelength_m * obj.migr_par;
             azimuth_comp_exp = repmat(azimuth_comp_phase_col_term, 1, row_len);
+            azimuth_comp = exp(1j * 4 * pi * azimuth_comp_exp);
+            azimuth_comp_filt = fftshift(azimuth_comp, 1);
+        end
+        function third_comp_filt = gen_third_comp_filt(obj)
+            row_len = length(obj.imaging_par.range_freq_axis_hz);
             third_comp_phase_col_term = (obj.imaging_par.closest_slant_range_m / ...
                                         obj.imaging_par.sig_par.light_speed_m_s)^2 * ...
                                         obj.modified_range_fm_rate_hz_s ./ ...
                                         obj.migr_par .* (1 ./ obj.migr_par - 1);
             third_comp_exp = repmat(third_comp_phase_col_term, 1, row_len);
-            % third_phase_func = exp(1j * 4 * pi * azimuth_comp_exp) .* ...
-            %                    exp(-1j * 4 * pi * third_comp_exp);
-            third_phase_func = exp(1j * 4 * pi * azimuth_comp_exp);
-            third_phase_func = fftshift(third_phase_func, 1);
+            third_comp = exp(-1j * 4 * pi * third_comp_exp);
+            third_comp_filt = fftshift(third_comp, 1);
         end
     end
 end
